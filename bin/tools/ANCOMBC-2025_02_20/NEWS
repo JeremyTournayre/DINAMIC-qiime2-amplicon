@@ -1,0 +1,18 @@
+version 2.6.xx (last update 2024-10-01)
+        + Fixed bugs
+        + Add data sanity check
+        + Highlight the importance of sensitivity analysis
+
+version 2.2.xx (last update 2023-09-18)
+        + Modify ancombc2 variance formula and the sensitivity analysis
+
+version 2.0.xx (last update 2022-12-17)
+        + Add ancombc2 function
+
+version 1.6.xx (last update 2021-08-13)
+        + Fixed bugs
+        + Updated warning messages
+        + Add secom functions
+
+version 1.0.0: (2020-10-31)
+        + Release!

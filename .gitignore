@@ -1,0 +1,25 @@
+# Data and results (large, per-project, not part of the pipeline code)
+Data/
+db/Data/
+
+# Per-job runtime files
+old
+input_all.tsv
+input_arg_qsub/
+*.log
+logs/
+run_conf/
+JT_qiime2.e*
+JT_qiime2_db.e*
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
+# OS / editor
+.DS_Store
+*~
+*.swp
+
+# SGE job output (from #$ -o directives)
+*.out
