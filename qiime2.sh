@@ -310,6 +310,7 @@ then
 		--p-min-fold-parent-over-abundance $P_MIN_FOLD_PARENT \
 		--o-table table.qza \
 		--o-representative-sequences rep-seqs.qza \
+		--o-base-transition-stats base-transition-stats.qza \
 		--o-denoising-stats denoising-stats.qza
 		echo "DONE: qiime dada2 denoise-single"
 		verification_result "rep-seqs.qza"
@@ -325,6 +326,7 @@ then
 		--o-table table.qza \
 		--p-min-overlap $P_MIN_OVERLAP \
 		--o-representative-sequences rep-seqs.qza \
+		--o-base-transition-stats base-transition-stats.qza \
 		--o-denoising-stats denoising-stats.qza
 		echo "DONE: qiime dada2 denoise-paired"	
 		verification_result "rep-seqs.qza"
@@ -352,8 +354,10 @@ then
 	echo "RUNNING: visualization table.qzv"
 	qiime feature-table summarize \
 	--i-table table.qza \
-	--o-visualization table.qzv \
-	--m-sample-metadata-file ../mapping.tsv
+	--m-metadata-file ../mapping.tsv \
+	--o-feature-frequencies feature-frequencies.qza \
+	--o-sample-frequencies sample-frequencies.qza \
+	--o-summary table.qzv
 	echo "DONE: visualization table.qzv"
 	verification_result "table.qzv"
 fi
@@ -425,8 +429,10 @@ then
 		echo "RUNNING: visualization vsearch_uchime-denovo/table.qzv"
 		qiime feature-table summarize \
 		--i-table vsearch_uchime-denovo/table.qza \
-		--m-sample-metadata-file ../mapping.tsv \
-		--o-visualization vsearch_uchime-denovo/table.qzv
+		--m-metadata-file ../mapping.tsv \
+		--o-feature-frequencies vsearch_uchime-denovo/feature-frequencies.qza \
+		--o-sample-frequencies vsearch_uchime-denovo/sample-frequencies.qza \
+		--o-summary vsearch_uchime-denovo/table.qzv
 		echo "DONE: visualization vsearch_uchime-denovo/table.qzv"
 		verification_result "vsearch_uchime-denovo/table.qzv"
 	fi
@@ -698,8 +704,10 @@ do
 		echo "RUNNING: feature-table summarize $dir_filt_feature"
 		qiime feature-table summarize \
 		--i-table $dir_filt_feature/table.qza \
-		--o-visualization $dir_filt_feature/table.qzv \
-		--m-sample-metadata-file ../mapping.tsv
+		--m-metadata-file ../mapping.tsv \
+		--o-feature-frequencies $dir_filt_feature/feature-frequencies.qza \
+		--o-sample-frequencies $dir_filt_feature/sample-frequencies.qza \
+		--o-summary $dir_filt_feature/table.qzv
 		echo "DONE: feature-table summarize $dir_filt_feature"
 		verification_result "$dir_filt_feature/table.qzv"
 	fi	
@@ -878,6 +886,7 @@ do
 				--i-phylogeny $dir_filt_feature/rooted-tree.qza \
 				--i-table $dir_filt_feature/table.qza \
 				--p-sampling-depth $rarefaction_depth \
+				--p-random-seed 42 \
 				--m-metadata-file ../mapping.tsv \
 				--output-dir $dir_filt_feature/core-metrics-results_$rarefaction_depth
 			echo "DONE: core-metrics-phylogenetic $dir_filt_feature $rarefaction_depth"

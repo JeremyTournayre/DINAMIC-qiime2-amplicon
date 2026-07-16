@@ -1,6 +1,8 @@
 # Data and results (large, per-project, not part of the pipeline code)
 Data/
 db/Data/
+input copy.tsv
+VERSION
 
 # Per-job runtime files
 old

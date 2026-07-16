@@ -5,7 +5,7 @@
 #$ -o JT_qiime2.out
 #$ -cwd
 #$ -pe thread 4
-#$ -q short.q
+#$ -q long.q
 #
 # launch.pl - orchestrator: reads input.tsv and runs qiime2.sh for each target.
 #
