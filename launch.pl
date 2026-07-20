@@ -4,8 +4,11 @@
 #$ -V
 #$ -o JT_qiime2.out
 #$ -cwd
-#$ -pe thread 4
-#$ -q long.q
+#$ -pe thread 20
+#$ -q infinit.q
+#$ -l h_vmem=40G
+#$ -l mem_free=160G
+
 #
 # launch.pl - orchestrator: reads input.tsv and runs qiime2.sh for each target.
 #
@@ -25,6 +28,8 @@
 # Typical usage:
 #   perl launch.pl input.tsv
 
+#### -pe thread 4
+#### -q long.q
 #### -pe thread 20
 #### -q infinit.q
 #### -l h_vmem=40G
@@ -45,6 +50,9 @@ print "QIIME2 environment (from config.sh): $conda_env_qiime2\n";
 print "Targets will be created under: $version_dir/\n";
 
 my %targets;
+
+my $nslots = defined($ENV{'NSLOTS'}) ? $ENV{'NSLOTS'} : 4;
+print "Threads (NSLOTS): $nslots\n";
 
 # Input file defaults to input.tsv; override with first argument.
 my $file = "input.tsv";
@@ -192,6 +200,7 @@ foreach (sort keys %targets) {
     my $filt = defined($targets{$target}{"filter"}) ? $targets{$target}{"filter"} : '';
     $filt =~ s/'/'\\''/g;
     print $cfh "FILTER='" . $filt . "'\n";
+    print $cfh "NSLOTS='" . $nslots . "'\n"; 
     close($cfh);
 
     print "go\n";

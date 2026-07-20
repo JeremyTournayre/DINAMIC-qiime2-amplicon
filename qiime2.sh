@@ -61,7 +61,7 @@ PROVENANCE_FILE="$TARGET_DIR/PROVENANCE.txt"
 # --- Load the named analysis parameters (KEY=value lines) --------------------
 # shellcheck disable=SC1090
 source "$RUN_CONF"
-
+NSLOTS="${NSLOTS:-4}"
 # Tag combining the database and its primer set, used to name taxonomy outputs.
 TAX_PREFIX="${TAXONOMY_DATABASE}-${TAXONOMY_DATABASE_PRIMER}"
 
@@ -191,6 +191,7 @@ then
 				qiime cutadapt trim-single \
 				--i-demultiplexed-sequences "$file.qza" \
 				--p-adapter $PRIMER_RREVERSE  \
+				--p-cores $NSLOTS \
 				--p-match-read-wildcards \
 				--p-match-adapter-wildcards \
 				--o-trimmed-sequences trimmed_remove_adapter_wild.qza 
@@ -203,6 +204,7 @@ then
 				--i-demultiplexed-sequences "$file.qza" \
 				--p-adapter-f $PRIMER_RREVERSE  \
 				--p-adapter-r $PRIMER_FREVERSE \
+				--p-cores $NSLOTS \
 				--p-match-read-wildcards \
 				--p-match-adapter-wildcards \
 				--o-trimmed-sequences trimmed_remove_adapter_wild.qza 
@@ -223,6 +225,7 @@ then
 			--i-demultiplexed-sequences $input_file \
 			--p-front $PRIMER_F  \
 			--p-match-read-wildcards \
+			--p-cores $NSLOTS \
 			--p-match-adapter-wildcards \
 			--p-discard-untrimmed \
 			--o-trimmed-sequences trimmed_remove_primers_wild.qza 
@@ -311,6 +314,7 @@ then
 		--o-table table.qza \
 		--o-representative-sequences rep-seqs.qza \
 		--o-base-transition-stats base-transition-stats.qza \
+		--p-n-threads $NSLOTS \
 		--o-denoising-stats denoising-stats.qza
 		echo "DONE: qiime dada2 denoise-single"
 		verification_result "rep-seqs.qza"
@@ -322,6 +326,7 @@ then
 		--p-trim-left-r $TRIM_R \
 		--p-trunc-len-f $TRUNC_F \
 		--p-trunc-len-r $TRUNC_R \
+		--p-n-threads $NSLOTS \
 		--p-min-fold-parent-over-abundance $P_MIN_FOLD_PARENT \
 		--o-table table.qza \
 		--p-min-overlap $P_MIN_OVERLAP \
@@ -455,6 +460,7 @@ then
 	qiime feature-classifier classify-sklearn \
 	--i-classifier $DB_DIR/Data/$TAXONOMY_DATABASE/$CONDA_ENV_QIIME2/$TAXONOMY_DATABASE_PRIMER/classifier.qza \
 	--i-reads $dir_table/rep-seqs.qza \
+	--p-n-jobs $NSLOTS \
 	--o-classification $dir_table/$TAX_PREFIX-taxonomy.qza
 	echo "DONE: classification"
 	verification_result "$dir_table/$TAX_PREFIX-taxonomy.qza"
@@ -499,6 +505,7 @@ then
 	qiime phylogeny align-to-tree-mafft-fasttree \
 	--i-sequences $dir_table/rep-seqs.qza \
 	--o-alignment $dir_table/aligned-rep-seqs.qza \
+	--p-n-threads $NSLOTS \
 	--o-masked-alignment $dir_table/masked-aligned-rep-seqs.qza \
 	--o-tree $dir_table/unrooted-tree.qza \
 	--o-rooted-tree $dir_table/rooted-tree.qza
@@ -731,6 +738,7 @@ do
 			qiime phylogeny align-to-tree-mafft-fasttree \
 			--i-sequences $dir_filt_feature/rep-seqs.qza \
 			--o-alignment $dir_filt_feature/aligned-rep-seqs.qza \
+			--p-n-threads $NSLOTS \
 			--o-masked-alignment $dir_filt_feature/masked-aligned-rep-seqs.qza \
 			--o-tree $dir_filt_feature/unrooted-tree.qza \
 			--o-rooted-tree $dir_filt_feature/rooted-tree.qza
@@ -815,20 +823,19 @@ do
 			verification_result "$dir_filt_feature/rep-seqs.qza"
 		fi	
 
-
 		if [[ ! -f $dir_filt_feature/rooted-tree.qza ]]
 		then
 			echo "RUNNING: qiime phylogeny $dir_filt_feature"
 			qiime phylogeny align-to-tree-mafft-fasttree \
 			--i-sequences $dir_filt_feature/rep-seqs.qza \
 			--o-alignment $dir_filt_feature/aligned-rep-seqs.qza \
+			--p-n-threads $NSLOTS \
 			--o-masked-alignment $dir_filt_feature/masked-aligned-rep-seqs.qza \
 			--o-tree $dir_filt_feature/unrooted-tree.qza \
 			--o-rooted-tree $dir_filt_feature/rooted-tree.qza
 			echo "DONE: qiime phylogeny $dir_filt_feature"
 			verification_result "$dir_filt_feature/rooted-tree.qza"
 		fi
-
 
 		########rarefaction to the lowest depth
 		if [[ ! -d $dir_filt_feature/table ]]
@@ -886,6 +893,7 @@ do
 				--i-phylogeny $dir_filt_feature/rooted-tree.qza \
 				--i-table $dir_filt_feature/table.qza \
 				--p-sampling-depth $rarefaction_depth \
+				--p-n-jobs-or-threads $NSLOTS \
 				--p-random-seed 42 \
 				--m-metadata-file ../mapping.tsv \
 				--output-dir $dir_filt_feature/core-metrics-results_$rarefaction_depth
