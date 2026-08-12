@@ -148,6 +148,23 @@ then
 	verification_result "verif_primers_input.txt"
 fi
 
+if [[ ! -f QC/multiqc_report.html ]]
+then
+    echo "RUNNING: FastQC + MultiQC on raw reads"
+    mkdir -p QC
+    fastqc \
+        --threads $NSLOTS \
+        --outdir QC \
+        input/*.fastq.gz
+    multiqc \
+        --outdir QC \
+        --filename multiqc_report \
+        --force \
+        QC
+    echo "DONE: FastQC + MultiQC on raw reads"
+    verification_result "QC/multiqc_report.html"
+fi
+
 file="demux-paired-end"
 mode="PairedEndSequencesWithQuality"
 if [[ $SINGLE_OR_PAIRED == "single" ]]
