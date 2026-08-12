@@ -194,6 +194,7 @@ then
 				--p-cores $NSLOTS \
 				--p-match-read-wildcards \
 				--p-match-adapter-wildcards \
+				--o-stats trimmed_remove_adapter_wild_stats.qza \
 				--o-trimmed-sequences trimmed_remove_adapter_wild.qza 
 				echo "DONE: qiime cutadapt trim-single trimmed_remove_adapter_wild.qza"
 				verification_result "trimmed_remove_adapter_wild.qza"
@@ -207,6 +208,7 @@ then
 				--p-cores $NSLOTS \
 				--p-match-read-wildcards \
 				--p-match-adapter-wildcards \
+				--o-stats trimmed_remove_adapter_wild_stats.qza \
 				--o-trimmed-sequences trimmed_remove_adapter_wild.qza 
 				echo "DONE: qiime cutadapt trim-paired trimmed_remove_adapter_wild.qza"
 				verification_result "trimmed_remove_adapter_wild.qza"
@@ -228,6 +230,7 @@ then
 			--p-cores $NSLOTS \
 			--p-match-adapter-wildcards \
 			--p-discard-untrimmed \
+			--o-stats trimmed_remove_primers_wild_stats.qza \
 			--o-trimmed-sequences trimmed_remove_primers_wild.qza 
 			echo "DONE: qiime cutadapt trim-single trimmed_remove_primers_wild.qza"
 			verification_result "trimmed_remove_primers_wild.qza"
@@ -241,6 +244,7 @@ then
 			--p-match-read-wildcards \
 			--p-match-adapter-wildcards \
 			--p-discard-untrimmed \
+			--o-stats trimmed_remove_adapter_wild_stats.qza \
 			--o-trimmed-sequences trimmed_remove_primers_wild.qza 
 			echo "DONE: qiime cutadapt trim-paired trimmed_remove_primers_wild.qza"
 			verification_result "trimmed_remove_primers_wild.qza"
