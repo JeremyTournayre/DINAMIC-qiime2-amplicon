@@ -91,6 +91,7 @@ if [[ $PRIMER_F != "no" ]]; then
         --p-r-primer     $PRIMER_R \
         --p-min-length   $MIN_LENGTH \
         --p-max-length   $MAX_LENGTH \
+        --o-read-extraction-stats "$OUT_DIR/ref-seqs_extraction-stats.qza" \
         --o-reads        "$OUT_DIR/ref-seqs.qza"
     echo "DONE: feature-classifier extract-reads"
 fi

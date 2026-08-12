@@ -25,3 +25,5 @@ JT_qiime2_db.e*
 
 # SGE job output (from #$ -o directives)
 *.out
+
+tmp

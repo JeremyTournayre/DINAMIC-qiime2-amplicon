@@ -20,7 +20,7 @@ export CONDA_PROFILE
 # under db/). Before rerunning an existing project under a different QIIME2
 # version, make sure this value reflects the version you intend to use.
 # CONDA_ENV_QIIME2="${CONDA_ENV_QIIME2:-qiime2-amplicon-2024.5}"
-CONDA_ENV_QIIME2="${CONDA_ENV_QIIME2:-rachis-qiime2-2026.4}"
+CONDA_ENV_QIIME2="${CONDA_ENV_QIIME2:-rachis-qiime2-2026.7}"
 export CONDA_ENV_QIIME2
 
 # --- R -------------------------------------------------------------------
