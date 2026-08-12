@@ -152,10 +152,14 @@ if [[ ! -f QC/multiqc_report.html ]]
 then
     echo "RUNNING: FastQC + MultiQC on raw reads"
     mkdir -p QC
-    fastqc \
-        --threads $NSLOTS \
-        --outdir QC \
-        input/*.fastq.gz
+    conda deactivate
+    conda activate fastqc-0.12.1
+	fastqc \
+    --threads $NSLOTS \
+    --outdir QC \
+    ../input/*_R1_* ../input/*_R2_*
+    conda deactivate
+	conda activate multiqc-1.27.1
     multiqc \
         --outdir QC \
         --filename multiqc_report \
@@ -163,6 +167,8 @@ then
         QC
     echo "DONE: FastQC + MultiQC on raw reads"
     verification_result "QC/multiqc_report.html"
+    conda deactivate
+    activate_qiime2
 fi
 
 file="demux-paired-end"
