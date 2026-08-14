@@ -3,6 +3,7 @@ Data/
 db/Data/
 input copy.tsv
 VERSION
+get_quality_data.txt
 
 # Per-job runtime files
 old
