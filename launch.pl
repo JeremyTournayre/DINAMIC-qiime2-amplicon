@@ -5,7 +5,7 @@
 #$ -o JT_qiime2.out
 #$ -cwd
 #$ -pe thread 20
-#$ -q infinit.q
+#$ -q short.q
 #$ -l h_vmem=40G
 #$ -l mem_free=160G
 
