@@ -102,6 +102,7 @@ echo "only_all_group     $ONLY_ALL_GROUP"
 echo "p-min-fold-parent  $P_MIN_FOLD_PARENT"
 echo "vsearch            $VSEARCH"
 echo "ANCOMBC_Nb_Perc    $ANCOMBC_NB_PERC"
+echo "stop_after_bar_plot    $STOP_AFTER_BAR_PLOT"
 
 filter="$FILTER"
 
@@ -539,6 +540,13 @@ then
 	echo "DONE: qiime phylogeny"
 	verification_result "$dir_table/rooted-tree.qza"
 fi
+
+if [[ "$STOP_AFTER_BAR_PLOT" == "yes" ]]
+then
+	echo "EXIT: taxa barplot finished"
+	exit 0
+fi
+
 if ! ls $dir_table/alpha-rarefaction_*.qzv 1>/dev/null 2>&1
 then
 	if [[ ! -d $dir_table/table ]]
