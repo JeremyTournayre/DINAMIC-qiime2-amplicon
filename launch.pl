@@ -133,7 +133,7 @@ my %conf_map = (
     'p-min-fold-parent-over-abundance' => 'P_MIN_FOLD_PARENT',
     'vsearch'                          => 'VSEARCH',
     'ANCOMBC_Nb_Perc'                  => 'ANCOMBC_NB_PERC',
-    'stop_after_bar_plot'                  => 'STOP_AFTER_BAR_PLOT',
+    'stop_after'                  => 'STOP_AFTER',
 );
 
 foreach (sort keys %targets) {

@@ -102,7 +102,7 @@ echo "only_all_group     $ONLY_ALL_GROUP"
 echo "p-min-fold-parent  $P_MIN_FOLD_PARENT"
 echo "vsearch            $VSEARCH"
 echo "ANCOMBC_Nb_Perc    $ANCOMBC_NB_PERC"
-echo "stop_after_bar_plot    $STOP_AFTER_BAR_PLOT"
+echo "stop_after    $STOP_AFTER"
 
 filter="$FILTER"
 
@@ -376,6 +376,11 @@ then
 	verification_result "denoising-stats.qzv"
 fi
 
+if [[ "$STOP_AFTER" == "denoising" ]]
+then
+	echo "EXIT: denoising-stats finished"
+	exit 0
+fi
 if [[ ! -f ../mapping.tsv ]]
 then
 	echo "EXIT: You must provide mapping.tsv file, you can add depth data at this step"
@@ -541,7 +546,7 @@ then
 	verification_result "$dir_table/rooted-tree.qza"
 fi
 
-if [[ "$STOP_AFTER_BAR_PLOT" == "yes" ]]
+if [[ "$STOP_AFTER" == "barplot" ]]
 then
 	echo "EXIT: taxa barplot finished"
 	exit 0
