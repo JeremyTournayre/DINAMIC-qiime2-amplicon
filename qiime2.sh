@@ -192,7 +192,7 @@ then
 	verification_result "$file.qza"
 fi
 
-if [[ ! -f "$file.qzv" ]]
+if [[ ! -f "$file.qzv" ]] || { [[ "$PRIMER_F" == "no" ]] && [[ ! -f "$file.qza" ]]; }
 then
 	echo "RUNNING: qiime demux summarize"
 	qiime demux summarize \
