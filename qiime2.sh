@@ -358,6 +358,7 @@ then
 		--p-min-fold-parent-over-abundance $P_MIN_FOLD_PARENT \
 		--o-table table.qza \
 		--p-min-overlap $P_MIN_OVERLAP \
+		--p-just-concatenate \
 		--o-representative-sequences rep-seqs.qza \
 		--o-base-transition-stats base-transition-stats.qza \
 		--o-denoising-stats denoising-stats.qza
