@@ -407,7 +407,7 @@ then
 	verification_result "table.qzv"
 fi
 
-if [[ ! -f rep-seqs.qzv ]]
+if [[ ! -f rep-seqs.qzv ]] && [[ "$RETAIN_UNMERGED" != "yes" ]]
 then
 	echo "RUNNING: visualization rep-seqs.qzv"
 	qiime feature-table tabulate-seqs \
@@ -415,6 +415,10 @@ then
 	--o-visualization rep-seqs.qzv
 	echo "DONE: visualization rep-seqs.qzv"
 	verification_result "rep-seqs.qzv"
+elif [[ ! -f rep-seqs.qzv ]] && [[ "$RETAIN_UNMERGED" == "yes" ]]
+then
+	echo "SKIPPING: visualization rep-seqs.qzv (retain_unmerged=yes -> rep-seqs.qza is FeatureData[LinkedSequence], tabulate-seqs only accepts Sequence|AlignedSequence)"
+	touch rep-seqs.qzv
 fi
 
 
