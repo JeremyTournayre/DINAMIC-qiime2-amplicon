@@ -85,6 +85,7 @@ echo "trim_F             $TRIM_F"
 echo "trim_R             $TRIM_R"
 echo "verif_primer_file  $VERIF_PRIMER_FILE"
 echo "p-min-overlap      $P_MIN_OVERLAP"
+echo "retain_unmerged    $RETAIN_UNMERGED"
 echo "taxonomy_database  $TAXONOMY_DATABASE"
 echo "taxonomy_db_primer $TAXONOMY_DATABASE_PRIMER"
 echo "comparison         $COMPARISON"
@@ -348,6 +349,11 @@ then
 		verification_result "rep-seqs.qza"
 	else
 		echo "RUNNING: qiime dada2 denoise-paired"
+		retain_unmerged_flag=""
+		if [[ "$RETAIN_UNMERGED" == "yes" ]]
+		then
+			retain_unmerged_flag="--p-retain-unmerged"
+		fi
 		qiime dada2 denoise-paired \
 		--i-demultiplexed-seqs $input_file \
 		--p-trim-left-f $TRIM_F \
@@ -358,7 +364,7 @@ then
 		--p-min-fold-parent-over-abundance $P_MIN_FOLD_PARENT \
 		--o-table table.qza \
 		--p-min-overlap $P_MIN_OVERLAP \
-		--p-retain-unmerged \
+		$retain_unmerged_flag \
 		--o-representative-sequences rep-seqs.qza \
 		--o-base-transition-stats base-transition-stats.qza \
 		--o-denoising-stats denoising-stats.qza

@@ -103,7 +103,8 @@ my @arguments = (
     "comparison", "filter_name", "filter", "sampling_depth",
     "single_or_paired", "filtFeatures_file_nb", "filtFeatures_val",
     "boxplot", "trunc_F", "trunc_R", "rarefaction", "only_all_group",
-    "p-min-fold-parent-over-abundance", "vsearch", "ANCOMBC_Nb_Perc"
+    "p-min-fold-parent-over-abundance", "vsearch", "ANCOMBC_Nb_Perc",
+    "retain_unmerged"
 );
 
 # Maps input.tsv column names to the shell variable names used in qiime2.sh.
@@ -133,7 +134,8 @@ my %conf_map = (
     'p-min-fold-parent-over-abundance' => 'P_MIN_FOLD_PARENT',
     'vsearch'                          => 'VSEARCH',
     'ANCOMBC_Nb_Perc'                  => 'ANCOMBC_NB_PERC',
-    'stop_after'                  => 'STOP_AFTER',
+    'stop_after'                       => 'STOP_AFTER',
+    'retain_unmerged'                  => 'RETAIN_UNMERGED',
 );
 
 foreach (sort keys %targets) {
