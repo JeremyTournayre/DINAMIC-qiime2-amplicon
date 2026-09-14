@@ -5,6 +5,8 @@
 #$ -o JT_qiime2_db.out
 #$ -cwd
 #$ -pe thread 4
+#$ -q long.q
+
 #
 # db/launch_db.pl - orchestrator for QIIME2 classifier building.
 # Reads db/input.tsv and calls build_classifier.sh for each primer/database
