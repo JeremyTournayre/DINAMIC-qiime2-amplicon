@@ -133,6 +133,10 @@ my %conf_map = (
     'only_all_group'                   => 'ONLY_ALL_GROUP',
     'p-min-fold-parent-over-abundance' => 'P_MIN_FOLD_PARENT',
     'vsearch'                          => 'VSEARCH',
+    # Optional: vsearch uchime-denovo thresholds (empty -> QIIME2 defaults,
+    # see qiime2.sh).
+    'vsearch_minh'                     => 'VSEARCH_MINH',
+    'vsearch_mindiv'                   => 'VSEARCH_MINDIV',
     'ANCOMBC_Nb_Perc'                  => 'ANCOMBC_NB_PERC',
     'stop_after'                       => 'STOP_AFTER',
     'retain_unmerged'                  => 'RETAIN_UNMERGED',

@@ -101,7 +101,15 @@ echo "trunc_R            $TRUNC_R"
 echo "rarefaction        $RAREFACTION"
 echo "only_all_group     $ONLY_ALL_GROUP"
 echo "p-min-fold-parent  $P_MIN_FOLD_PARENT"
+# vsearch uchime-denovo thresholds: optional input.tsv columns vsearch_minh /
+# vsearch_mindiv. Empty -> QIIME2 defaults (0.28 / 0.8). Runs before
+# 2026-11-13 had 0.05 / 0.2 hard-coded (taken from Young et al. 2022, a fungal
+# D2 LSU study); set those values to reproduce older results.
+VSEARCH_MINH="${VSEARCH_MINH:-0.28}"
+VSEARCH_MINDIV="${VSEARCH_MINDIV:-0.8}"
 echo "vsearch            $VSEARCH"
+echo "vsearch_minh       $VSEARCH_MINH"
+echo "vsearch_mindiv     $VSEARCH_MINDIV"
 echo "ANCOMBC_Nb_Perc    $ANCOMBC_NB_PERC"
 echo "stop_after    $STOP_AFTER"
 
@@ -434,8 +442,8 @@ then
 		qiime vsearch uchime-denovo \
 		--i-sequences rep-seqs.qza \
 		--i-table table.qza \
-		--p-mindiv 0.2 \
-		--p-minh 0.05 \
+		--p-mindiv $VSEARCH_MINDIV \
+		--p-minh $VSEARCH_MINH \
 		--output-dir vsearch_uchime-denovo 
 		echo "DONE: vsearch_uchime-denovo"
 		verification_result "vsearch_uchime-denovo/stats.qza"

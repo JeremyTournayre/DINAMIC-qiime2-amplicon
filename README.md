@@ -54,6 +54,15 @@ Targets are created under `Data/<qiime2_conda_env>/<target>/`. Each run
 writes a `PROVENANCE.txt` file recording the exact pipeline git commit used,
 for traceability.
 
+### vsearch chimera thresholds (optional columns)
+
+When `vsearch` is set to `vsearch`, `qiime vsearch uchime-denovo` runs after
+DADA2. Its thresholds are read from the optional `input.tsv` columns
+`vsearch_minh` and `vsearch_mindiv`; when absent or empty, the QIIME2 defaults
+are used (0.28 / 0.8). Runs before 2026-11-13 used 0.05 / 0.2 hard-coded
+(values from a fungal LSU study, too strict for bacterial 16S: 20-45 % of
+DADA2 reads removed); set these values to reproduce older results.
+
 ### Additional numeric metadata (mapping_extra.tsv)
 
 Some numeric metadata columns (e.g. physico-chemical measurements) are
