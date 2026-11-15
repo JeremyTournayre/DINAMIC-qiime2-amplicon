@@ -23,7 +23,8 @@
 #     one-factor PERMANOVA lists, non_normalized table only (Aitchison is
 #     scale invariant, so TSS would give the same result, and rarefying
 #     before CLR only adds zeros).
-#   - betadisper_<norm>.tsv: dispersion test (betadisper + permutest).
+#   - betadisper_<norm>.tsv: dispersion test (betadisper with small-sample
+#     bias adjustment + permutest).
 #   - permanova_block_<norm>.tsv: adonis2(dist ~ block + group,
 #     by = "margin"), once with free permutations and once with
 #     permutations restricted within blocks (or free permutations again,
@@ -296,7 +297,10 @@ analyze_diversity <- function(ps_object, label) {
     # rather than in location, especially with unbalanced groups.
     if (nlevels(groups) > 1) {
         betadisper_res <- do.call(rbind, lapply(names(dists), function(dn) {
-            bd <- betadisper(dists[[dn]], groups)
+            # bias.adjust: distances to centroid x sqrt(n / (n - 1)) per
+            # group (Stier et al. 2013), corrects the underestimated
+            # dispersion of small groups (x1.22 for n = 3, ~x1 for large n).
+            bd <- betadisper(dists[[dn]], groups, bias.adjust = TRUE)
             pt <- permutest(bd, permutations = n_perm)
             tab <- as.data.frame(pt$tab)
             data.frame(Method = dn, Normalization = label,

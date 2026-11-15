@@ -86,7 +86,8 @@ Always (since 2026-11):
 
 - Aitchison distance (CLR, pseudocount 1, non-rarefied table) in QIIME2
   (`aitchison_distance_matrix.qza/.qzv`, PCoA) and vegan; dispersion tests
-  (`permdisp_<metric>.qzv`, `betadisper_*.tsv`).
+  (`permdisp_<metric>.qzv`; `betadisper_*.tsv` with `bias.adjust = TRUE`,
+  small-sample correction, negligible for large groups).
 - ANCOM-BC2 `struc_zero = TRUE` (no manual pseudocount); `neg_lb` is FALSE
   unless every group has > 30 samples. Structural zeros are listed in
   `ANCOM-BC_structural_zeros.tsv`.
