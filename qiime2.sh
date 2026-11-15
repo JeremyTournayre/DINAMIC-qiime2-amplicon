@@ -625,6 +625,12 @@ then
 fi	
 
 
+if [[ "$STOP_AFTER" == "goodcov" ]]
+then
+	echo "EXIT: alpha-rarefaction and good's coverage finished"
+	exit 0
+fi
+
 dir_filt_feature="Filter_Stat/All"
 ##########################################################
 if [[ $FILTFEATURES_MODE != "All" ]]
