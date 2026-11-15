@@ -62,10 +62,34 @@ PROVENANCE_FILE="$DB/PROVENANCE.txt"
     echo "---"
 } >> "$PROVENANCE_FILE"
 
+# --- Clean the raw download before import ------------------------------------
+# The v2 files have Windows line endings, and 4 fasta IDs differ from the
+# taxonomy file (WI3B vs WI3_B, ITS158SITS2 vs ITS1_58S_ITS2, UH31 vs UH3_1).
+# fit-classifier-naive-bayes silently drops reads that have no taxonomy, and
+# classify-consensus-vsearch refuses to run, so fix the IDs and check them.
+# The downloaded files in $RAW are left untouched.
+CLEAN="$DB/clean"
+mkdir -p "$CLEAN"
+FASTA="$CLEAN/AGF_LSU_database_v2.fasta"
+TAX="$CLEAN/AGF_LSU_tax_v2.txt"
+tr -d '\r' < "$RAW/AGF_LSU_database_v2.fasta" | sed \
+    -e 's/^>Neocallimastix_sp_WI3B_ITS158SITS2_/>Neocallimastix_sp_WI3_B_ITS1_58S_ITS2_/' \
+    -e 's/^>Neocallimastix_sp_WI3B_LSU_/>Neocallimastix_sp_WI3_B_LSU_/' \
+    -e 's/^>Piromyces_spUH31_LSU_/>Piromyces_spUH3_1_LSU_/' > "$FASTA"
+tr -d '\r' < "$RAW/AGF_LSU_tax_v2.txt" | sed -e '$a\' > "$TAX"
+ID_DIFF=$(comm -3 <(grep '>' "$FASTA" | sed 's/^>//; s/[[:space:]].*//' | sort) \
+                  <(cut -f1 "$TAX" | sort))
+if [[ -n "$ID_DIFF" ]]; then
+    echo "ERROR: sequence IDs differ between fasta and taxonomy:"
+    echo "$ID_DIFF"
+    exit 1
+fi
+echo "IDs checked: $(grep -c '>' "$FASTA") sequences, all with a taxonomy" | tee -a "$PROVENANCE_FILE"
+
 echo "RUNNING: qiime import Sequence"
 qiime tools import \
     --type 'FeatureData[Sequence]' \
-    --input-path  $RAW/AGF_LSU_database_v2.fasta \
+    --input-path  "$FASTA" \
     --output-path $DB/ref-otus.qza
 echo "DONE: qiime import Sequence"
 
@@ -73,7 +97,7 @@ echo "RUNNING: qiime import Taxonomy"
 qiime tools import \
     --type 'FeatureData[Taxonomy]' \
     --input-format HeaderlessTSVTaxonomyFormat \
-    --input-path  $RAW/AGF_LSU_tax_v2.txt \
+    --input-path  "$TAX" \
     --output-path $DB/ref-taxonomy.qza
 echo "DONE: qiime import Taxonomy"
 
