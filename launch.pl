@@ -137,6 +137,9 @@ my %conf_map = (
     # see qiime2.sh).
     'vsearch_minh'                     => 'VSEARCH_MINH',
     'vsearch_mindiv'                   => 'VSEARCH_MINDIV',
+    # Optional: mapping.tsv column of the blocking factor (e.g. donor
+    # animal) used as covariate in the statistics (empty -> no block).
+    'block'                            => 'BLOCK',
     'ANCOMBC_Nb_Perc'                  => 'ANCOMBC_NB_PERC',
     'stop_after'                       => 'STOP_AFTER',
     'retain_unmerged'                  => 'RETAIN_UNMERGED',

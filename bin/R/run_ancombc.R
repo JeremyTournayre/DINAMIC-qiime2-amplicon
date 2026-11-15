@@ -12,6 +12,33 @@
 #   args[3] - metadata column for group comparison
 #   args[4] - "yes" to produce boxplots, anything else to skip
 #   args[5] - prevalence filter "N,frac" (e.g. "100,0.5")
+#   args[6] - optional blocking factor: mapping.tsv column (e.g. Animal) or
+#             "none" (default). Added as a fixed-effect covariate when it is
+#             usable for the comparison (see the use_block check below).
+#
+# Changes 2026-11 (reviewer requests: donor effect, compositionality):
+#   - ANCOM-BC2: the manual pseudocount (count 1 given to taxa absent from a
+#     whole group) is removed; struc_zero = TRUE detects those taxa instead.
+#     ANCOM-BC2 then excludes them from res / res_global / res_pair; they are
+#     written to ANCOM-BC_structural_zeros.tsv with prevalence and mean
+#     relative abundance per group. neg_lb stays at its default (FALSE)
+#     unless every group has > 30 samples (ANCOMBC documentation advice).
+#   - Block: fix_formula = "<block> + <group>" for ANCOM-BC2, design
+#     ~ <block> + <group> for DESeq2, IndicSpecies permutations restricted
+#     within blocks (free permutations when blocks allow < 100 distinct
+#     permutations; scheme in the "permutations" column). The block
+#     coefficients are removed from the ANCOM-BC2
+#     output so the downstream tables keep the same columns (group effect
+#     only). LEfSe has no blocking (its subclass option is not a block).
+#   - IndicSpecies and LEfSe now use relative abundances (proportion of the
+#     sample's total reads at that taxonomic level, before the prevalence
+#     filter; x 1e6 for LEfSe as in the original LEfSe) instead of raw
+#     counts. IndicSpecies gets a BH-adjusted p-value (p.value.BH, per
+#     taxonomic level).
+#   - DESeq2 pairwise contrasts are now log2(group2 / group1), the same
+#     direction as ANCOM-BC2 (later level vs earlier level); before they
+#     were log2(group1 / group2). The global DESeq2 result (used when there
+#     are only 2 groups) is unchanged: log2(second level / first level).
 
 rm(list = ls())
 options(warn = -1)
@@ -38,6 +65,7 @@ setwd(tmp_getwd)
 library(lefser)
 library(Cairo)
 library(indicspecies)
+library(permute)    # how(): restricted permutations for multipatt
 library(DESeq2)
 library(qiime2R)
 library(data.table)
@@ -60,11 +88,55 @@ physeq <- qza_to_phyloseq(
 )
 
 var <- args[3]
+block_var <- if (length(args) >= 6 && nzchar(args[6])) args[6] else "none"
+n_perm <- 999
 
 meta <- sample_data(physeq)
 meta[[var]] <- as.character(meta[[var]])
 meta[[var]][is.na(meta[[var]])] <- "NA"
 meta[[var]] <- factor(meta[[var]])
+
+# Decide once whether the block can be used: given, different from the
+# comparison column, present, > 1 level, and not confounded with the group
+# (full-rank ~ block + group design). The samples are the same at every
+# taxonomic level, so this holds for the whole script.
+use_block <- FALSE
+if (block_var != "none") {
+    if (block_var == var) {
+        cat("Block '", block_var, "' is the comparison column: no block.\n", sep = "")
+    } else if (!block_var %in% colnames(meta)) {
+        cat("Block column '", block_var, "' not in mapping.tsv: no block.\n", sep = "")
+    } else {
+        meta[[block_var]] <- factor(as.character(meta[[block_var]]))
+        mm <- model.matrix(as.formula(paste("~", block_var, "+", var)),
+                           data = as(meta, "data.frame")[, c(block_var, var), drop = FALSE])
+        if (nlevels(meta[[block_var]]) < 2) {
+            cat("Block '", block_var, "' has a single level here: no block.\n", sep = "")
+        } else if (qr(mm)$rank < ncol(mm)) {
+            cat("Block '", block_var, "' is confounded with '", var, "': no block.\n", sep = "")
+        } else {
+            use_block <- TRUE
+        }
+    }
+}
+cat("Block used: ", if (use_block) block_var else "none", "\n", sep = "")
+
+# Permutation control for multipatt (IndicSpecies): within blocks when a
+# block is used and it allows at least min_distinct_perm distinct
+# permutations, free permutations otherwise (e.g. 3 animals x 2 samples =
+# 8 permutations, p >= 0.125). The scheme is written in the output.
+min_distinct_perm <- 100
+perm_control <- function(blk) {
+    if (!use_block || is.null(blk)) return(list(ctrl = how(nperm = n_perm), label = "free"))
+    blk  <- factor(as.character(blk))
+    ctrl <- how(nperm = n_perm, blocks = blk)
+    np   <- numPerms(length(blk), control = ctrl)
+    if (np < min_distinct_perm) {
+        return(list(ctrl = how(nperm = n_perm),
+                    label = paste0("free (fallback: only ", np, " within-block permutations)")))
+    }
+    return(list(ctrl = ctrl, label = "within_block"))
+}
 sample_data(physeq) <- meta
 
 
@@ -142,6 +214,13 @@ for (i in 2:length(taxa)) {
     otu_mat       <- as.data.frame(otu_table(aggregate_taxa_physeq))
     otu_mat$taxon_full <- taxonomy_df$taxon_full
 
+    # Relative abundances at this level, computed on the whole table
+    # (before the prevalence filter below) so that each sample's
+    # denominator is its total read count, not only the retained taxa.
+    count_full <- as.matrix(otu_mat[, setdiff(colnames(otu_mat), "taxon_full"), drop = FALSE])
+    rel_full   <- sweep(count_full, 2, colSums(count_full), "/")
+    rownames(rel_full) <- otu_mat$taxon_full
+
     groups_local <- unique(meta_df[[group_col]])
 
     # Prevalence filtering: keep taxa present in at least frac of samples in each group.
@@ -187,8 +266,27 @@ for (i in 2:length(taxa)) {
         # IndicSpecies/LEfSe comparison below.
 
         mapping <- as(sample_data(physeq_filtered), "data.frame")
+        if (use_block) mapping[[block_var]] <- factor(as.character(mapping[[block_var]]))
 
-        design_formula      <- as.formula(paste("~", args[3]))
+        # Relative abundances of the retained taxa, same rows/columns as
+        # otu_physeq_filtered_aggr_matr (used by IndicSpecies and LEfSe).
+        rel_idx  <- match(tax_asv_filtered$taxon_full, rownames(rel_full))
+        rel_filt <- rel_full[rel_idx, colnames(otu_physeq_filtered_aggr_matr), drop = FALSE]
+        if (anyNA(rel_idx)) {
+            cat("[", taxa[i], "] WARNING: some retained taxa not found in the full table;",
+                " relative abundances computed on the retained taxa only.\n", sep = "")
+            rel_filt <- sweep(otu_physeq_filtered_aggr_matr, 2,
+                              colSums(otu_physeq_filtered_aggr_matr), "/")
+        }
+        rownames(rel_filt) <- tax_asv_filtered$taxon_full
+
+        # Group variable last: results(dds) then reports the group effect,
+        # adjusted for the block.
+        design_formula <- if (use_block) {
+            as.formula(paste("~", block_var, "+", args[3]))
+        } else {
+            as.formula(paste("~", args[3]))
+        }
 
         cat("[", taxa[i], "] group counts for DESeq2 design: ",
             paste(names(table(mapping[, args[3]])), table(mapping[, args[3]]), sep = "=", collapse = ", "),
@@ -237,7 +335,9 @@ for (i in 2:length(taxa)) {
             }
 
             comparisons        <- combn(levels(mapping[, args[3]]), 2, simplify = FALSE)
-            pairwise_results_d <- lapply(comparisons, function(x) results(dds, contrast = c(args[3], x[1], x[2])))
+            # log2(group2 / group1), i.e. later level vs earlier level, the
+            # same direction as ANCOM-BC2 (see header).
+            pairwise_results_d <- lapply(comparisons, function(x) results(dds, contrast = c(args[3], x[2], x[1])))
             names(pairwise_results_d) <- sapply(comparisons, function(x) paste(x, collapse = "_vs_"))
 
             if (length(comparisons) > 1) {
@@ -268,8 +368,14 @@ for (i in 2:length(taxa)) {
             " | n samples in otu matrix: ", ncol(otu_physeq_filtered_aggr_matr),
             " | n samples in mapping: ", nrow(mapping),
             "\n", sep = "")
-        results_ind    <- multipatt(t(otu_physeq_filtered_aggr_matr), mapping[, args[3]], func = "IndVal.g")
+        # Relative abundances; permutations restricted within blocks when a
+        # block is used.
+        pc_is <- perm_control(if (use_block) mapping[[block_var]] else NULL)
+        results_ind    <- multipatt(t(rel_filt), mapping[, args[3]], func = "IndVal.g",
+                                    control = pc_is$ctrl)
         results_ind    <- results_ind$sign
+        results_ind$p.value.BH <- p.adjust(results_ind$p.value, method = "BH")
+        results_ind$permutations <- pc_is$label
         rownames(results_ind) <- tax_asv_filtered$taxon_full
         res_cbind_ind  <- cbind(features = rownames(results_ind), level = taxa[i], results_ind)
         if (exists("IndicSpecies_results_global")) {
@@ -286,10 +392,14 @@ for (i in 2:length(taxa)) {
                     g1           <- groups_is[ii]
                     g2           <- groups_is[j]
                     subset_idx   <- mapping[, args[3]] %in% c(g1, g2)
-                    subset_data  <- t(otu_physeq_filtered_aggr_matr)[subset_idx, ]
+                    subset_data  <- t(rel_filt)[subset_idx, ]
                     subset_grps  <- as.factor(as.character(mapping[subset_idx, args[3]]))
-                    res_pw_is    <- multipatt(subset_data, subset_grps, func = "IndVal.g")
+                    pc_pw        <- perm_control(if (use_block) mapping[subset_idx, block_var] else NULL)
+                    res_pw_is    <- multipatt(subset_data, subset_grps, func = "IndVal.g",
+                                              control = pc_pw$ctrl)
                     pvals        <- res_pw_is$sign
+                    pvals$p.value.BH <- p.adjust(pvals$p.value, method = "BH")
+                    pvals$permutations <- pc_pw$label
                     rownames(pvals) <- tax_asv_filtered$taxon_full
                     colnames(pvals)[colnames(pvals) == paste0("s.", g1)] <- "s.group1"
                     colnames(pvals)[colnames(pvals) == paste0("s.", g2)] <- "s.group2"
@@ -316,14 +426,16 @@ for (i in 2:length(taxa)) {
                 g1           <- groups_is[ii]
                 g2           <- groups_is[j]
                 subset_idx   <- mapping[, args[3]] %in% c(g1, g2)
-                subset_data  <- otu_physeq_filtered_aggr_matr[, subset_idx]
+                # Relative abundances scaled to 1e6 per sample (as in the
+                # original LEfSe), no blocking.
+                subset_data  <- rel_filt[, subset_idx, drop = FALSE] * 1e6
                 subset_grps  <- as.factor(as.character(mapping[subset_idx, args[3]]))
                 rownames(subset_data) <- tax_asv_filtered$taxon_full
                 se <- SummarizedExperiment(
-                    assays  = list(counts = subset_data),
+                    assays  = list(rel_abs = subset_data),
                     colData = data.frame(class = subset_grps)
                 )
-                res_lefse <- lefser(se, class = "class",
+                res_lefse <- lefser(se, classCol = "class",
                                     kruskal.threshold = 0.05, wilcox.threshold = 0.05)
                 if (nrow(res_lefse) > 0) {
                     res_lefse$group1 <- g1
@@ -342,36 +454,80 @@ for (i in 2:length(taxa)) {
         }
     }
 
-    # ANCOM-BC2: add pseudocount to completely absent taxa to avoid structural zeros.
-    pseudovalue <- 1
-    otu_table_v <- otu_table(physeq_asv_filtered)
-
-    for (group in groups_local) {
-        samples_in_group <- rownames(meta_df[meta_df[[group_col]] == group, ])
-        zero_taxa        <- rowSums(otu_table(physeq_filtered_tmp)[, samples_in_group]) == 0
-        names(zero_taxa) <- tax_asv_filtered$taxon_full
-        zero_asv_list    <- rownames(tax_table_df)[tax_table_df$taxon_full %in% names(zero_taxa)[zero_taxa]]
-        zero_taxon_list  <- tax_table_df$taxon_full[tax_table_df$taxon_full %in% names(zero_taxa)[zero_taxa]]
-        already_done     <- c()
-        zz <- 0
-        for (taxon in zero_taxon_list) {
-            zz <- zz + 1
-            if (taxon %in% already_done) next
-            selected_asv                          <- zero_asv_list[zz]
-            otu_table_v[selected_asv, samples_in_group] <- pseudovalue
-            already_done <- c(already_done, taxon)
-        }
-    }
-    physeq_asv_filtered@otu_table <- otu_table_v
-
+    # ANCOM-BC2. Taxa absent from a whole group are no longer given a
+    # pseudocount: struc_zero = TRUE flags them as structural zeros (see
+    # header). neg_lb: ANCOMBC default (FALSE) unless every group has > 30
+    # samples, as recommended in the ANCOMBC documentation.
     physeq_filtered <- aggregate_taxa(physeq_asv_filtered, taxa[i])
 
     if (nrow(tax_table(physeq_filtered)) > 1) {
-        out <- suppressMessages(
-            ancombc2(data = physeq_asv_filtered, fix_formula = args[3],
-                     tax_level = taxa[i], p_adj_method = "BH",
-                     global = TRUE, group = args[3], pairwise = TRUE)
+        group_sizes  <- table(meta_df[[group_col]])
+        neg_lb_value <- min(group_sizes) > 30
+        fix_formula_value <- if (use_block) paste(block_var, "+", args[3]) else args[3]
+        cat("[", taxa[i], "] ANCOM-BC2 fix_formula = ", fix_formula_value,
+            ", struc_zero = TRUE, neg_lb = ", neg_lb_value,
+            " (smallest group: ", min(group_sizes), " samples)\n", sep = "")
+
+        # ancombc2() stops when no taxon is left (e.g. all of them flagged as
+        # structural zeros, or removed by its own prevalence cut): skip this
+        # level instead of losing every output of the script.
+        out <- tryCatch(
+            suppressMessages(
+                ancombc2(data = physeq_asv_filtered, fix_formula = fix_formula_value,
+                         tax_level = taxa[i], p_adj_method = "BH",
+                         struc_zero = TRUE, neg_lb = neg_lb_value,
+                         global = TRUE, group = args[3], pairwise = TRUE)
+            ),
+            error = function(e) {
+                cat("[", taxa[i], "] ANCOM-BC2 skipped: ", conditionMessage(e), "\n", sep = "")
+                NULL
+            }
         )
+        if (is.null(out)) next
+
+        # Drop the block coefficients (lfc_/se_/W_/p_/q_/diff_/passed_ss_
+        # <block><level>) so that out$res only holds the intercept and the
+        # group effect, as without a block: the downstream scripts (boxplots
+        # below, merged_da_results.pl, Excel formatting) read every q_ / lfc_
+        # column as a group effect.
+        if (use_block && !is.null(out$res)) {
+            block_terms <- paste0(block_var, levels(factor(as.character(meta_df[[block_var]]))))
+            stat_prefix <- "^(lfc|se|W|p|q|diff_robust|diff|passed_ss)_"
+            stripped    <- sub(stat_prefix, "", names(out$res))
+            out$res     <- out$res[, !(stripped %in% block_terms), drop = FALSE]
+        }
+
+        # Structural zeros: taxa absent from at least one whole group.
+        # ANCOM-BC2 leaves them out of the tests; keep them in a separate
+        # table with prevalence (n/N samples with reads) and mean relative
+        # abundance (%) per group, from the whole (unfiltered) table.
+        if (!is.null(out$zero_ind) && nrow(out$zero_ind) > 0) {
+            zi       <- as.data.frame(out$zero_ind)
+            sz_cols  <- grep("^structural_zero", names(zi), value = TRUE)
+            zi       <- zi[rowSums(as.matrix(zi[, sz_cols, drop = FALSE]) == TRUE) > 0, , drop = FALSE]
+            if (nrow(zi) > 0) {
+                idx <- match(zi$taxon, rownames(rel_full))
+                for (g in sort(as.character(groups_local))) {
+                    s_g <- rownames(meta_df[meta_df[[group_col]] == g, , drop = FALSE])
+                    s_g <- intersect(s_g, colnames(count_full))
+                    zi[[paste0("Prevalence_", g)]] <- ifelse(is.na(idx), NA,
+                        paste0(rowSums(count_full[idx, s_g, drop = FALSE] > 0), "/", length(s_g)))
+                    zi[[paste0("MeanRelAb_pct_", g)]] <- ifelse(is.na(idx), NA,
+                        rowMeans(rel_full[idx, s_g, drop = FALSE]) * 100)
+                }
+                # cbind.data.frame already uses check.names = FALSE.
+                zi <- cbind(name = zi$taxon, `Stat on taxa` = taxa[i],
+                            zi[, setdiff(names(zi), "taxon"), drop = FALSE])
+                struc_zero_all <- if (exists("struc_zero_all")) rbind(struc_zero_all, zi) else zi
+            }
+        }
+
+        # Every taxon may have been set aside as a structural zero at this
+        # level: nothing left to test or plot.
+        if (is.null(out$res) || nrow(out$res) == 0) {
+            cat("[", taxa[i], "] no taxon left for ANCOM-BC2 after structural-zero detection.\n", sep = "")
+            next
+        }
 
         abundance_mat    <- abundances(physeq_filtered)
         mean_abundances  <- sapply(groups_local, function(g) {
@@ -496,11 +652,27 @@ for (i in 2:length(taxa)) {
     }
 }
 
-# Write global ANCOM-BC results.
-colnames(res)[1] <- "name"
-colnames(res)[2] <- "Stat on taxa"
-if (exists("respairwise")) res <- res[order(as.numeric(res[, 5])), ]
-write.table(res, paste0(dir_out2, "/ANCOM-BC.tsv"), sep = "\t", row.names = FALSE)
+# Write global ANCOM-BC results (res does not exist when ANCOM-BC2 was
+# skipped at every level, e.g. very few taxa: still write the other methods).
+if (exists("res")) {
+    colnames(res)[1] <- "name"
+    colnames(res)[2] <- "Stat on taxa"
+    if (exists("respairwise")) res <- res[order(as.numeric(res[, 5])), ]
+    write.table(res, paste0(dir_out2, "/ANCOM-BC.tsv"), sep = "\t", row.names = FALSE)
+} else {
+    write.table("ANCOM-BC2 skipped at every taxonomic level.",
+                paste0(dir_out2, "/ANCOM-BC.tsv"), sep = "\t", row.names = FALSE, col.names = FALSE)
+}
+
+# Structural zeros (taxa absent from at least one whole group; not tested
+# by ANCOM-BC2, see header).
+if (exists("struc_zero_all")) {
+    write.table(struc_zero_all, paste0(dir_out2, "/ANCOM-BC_structural_zeros.tsv"),
+                sep = "\t", row.names = FALSE)
+} else {
+    write.table("No structural zero detected.", paste0(dir_out2, "/ANCOM-BC_structural_zeros.tsv"),
+                sep = "\t", row.names = FALSE, col.names = FALSE)
+}
 
 if (is.null(lefse_results_pairwise)) lefse_results_pairwise <- c("No significant features found.")
 

@@ -111,6 +111,13 @@ echo "vsearch            $VSEARCH"
 echo "vsearch_minh       $VSEARCH_MINH"
 echo "vsearch_mindiv     $VSEARCH_MINDIV"
 echo "ANCOMBC_Nb_Perc    $ANCOMBC_NB_PERC"
+# Blocking factor (optional input.tsv column "block", e.g. Animal): a
+# mapping.tsv column added as covariate to PERMANOVA (QIIME2 adonis and
+# vegan), ANCOM-BC2, DESeq2, IndicSpecies (restricted permutations) and the
+# alpha-diversity linear models. Empty -> "none" (one-factor analyses only).
+# Ignored for a given analysis when it equals the comparison column.
+BLOCK="${BLOCK:-none}"
+echo "block              $BLOCK"
 echo "stop_after    $STOP_AFTER"
 
 filter="$FILTER"
@@ -962,7 +969,34 @@ do
 		save_dir_filt_feature_2=$dir_filt_feature
 		dir_filt_feature=$dir_filt_feature/core-metrics-results_$rarefaction_depth
 
-		for metric in weighted_unifrac unweighted_unifrac jaccard bray_curtis
+		# Aitchison distance (CLR + Euclidean), the compositional beta-diversity
+		# metric. Computed on the filtered, NON-rarefied table (CLR does not
+		# need rarefaction; rarefying would only add zeros), pseudocount 1.
+		# Stored next to the core-metrics outputs so that it goes through the
+		# same PCoA plot / group-significance / summary steps below.
+		if [[ ! -f $dir_filt_feature/aitchison_distance_matrix.qza ]]
+		then
+			echo "RUNNING: diversity beta aitchison $dir_filt_feature"
+			qiime diversity beta \
+				--i-table $save_dir_filt_feature_2/table.qza \
+				--p-metric aitchison \
+				--p-pseudocount 1 \
+				--p-n-jobs $NSLOTS \
+				--o-distance-matrix $dir_filt_feature/aitchison_distance_matrix.qza
+			verification_result "$dir_filt_feature/aitchison_distance_matrix.qza"
+			echo "DONE: diversity beta aitchison $dir_filt_feature"
+		fi
+		if [[ ! -f $dir_filt_feature/aitchison_pcoa_results.qza ]]
+		then
+			echo "RUNNING: diversity pcoa aitchison $dir_filt_feature"
+			qiime diversity pcoa \
+				--i-distance-matrix $dir_filt_feature/aitchison_distance_matrix.qza \
+				--o-pcoa $dir_filt_feature/aitchison_pcoa_results.qza
+			verification_result "$dir_filt_feature/aitchison_pcoa_results.qza"
+			echo "DONE: diversity pcoa aitchison $dir_filt_feature"
+		fi
+
+		for metric in weighted_unifrac unweighted_unifrac jaccard bray_curtis aitchison
 		do
 			if [[ ! -f $dir_filt_feature/metadata_${metric}.png ]]
 			then
@@ -1112,6 +1146,64 @@ do
 			fi						  
 			echo "DONE: diversity beta-group-significance bray_curtis_distance_matrix $dir_filt_feature $rarefaction_depth"
 		fi
+
+		if [[ ! -f $dir_filt_feature/aitchison_distance_matrix.qzv ]]
+		then
+			echo "RUNNING: diversity beta-group-significance aitchison_distance_matrix $dir_filt_feature"
+			qiime diversity beta-group-significance \
+				--i-distance-matrix $dir_filt_feature/aitchison_distance_matrix.qza \
+				--m-metadata-file ../mapping.tsv \
+				--m-metadata-column $COMPARISON \
+				--o-visualization $dir_filt_feature/aitchison_distance_matrix.qzv \
+				--p-pairwise
+			if [[ ! -f $dir_filt_feature/aitchison_distance_matrix.qzv ]]
+			then
+				touch $dir_filt_feature/aitchison_distance_matrix.qzv
+			fi
+			echo "DONE: diversity beta-group-significance aitchison_distance_matrix $dir_filt_feature"
+		fi
+
+		# Dispersion test (PERMDISP) and multi-factor PERMANOVA (adonis) with
+		# the blocking factor. Output names do not contain "distance_matrix"
+		# or "group-signifi" on purpose: summary_results.pl only parses the
+		# one-factor beta-group-significance outputs above. The vegan script
+		# (diversity_vegan_tss.R) is the reference for the blocked PERMANOVA
+		# (adds permutations restricted within blocks); QIIME2 adonis uses
+		# free permutations and is kept to cross-check the p-values.
+		for metric in weighted_unifrac unweighted_unifrac jaccard bray_curtis aitchison
+		do
+			if [[ ! -f $dir_filt_feature/permdisp_${metric}.qzv ]]
+			then
+				echo "RUNNING: diversity beta-group-significance permdisp ${metric} $dir_filt_feature"
+				qiime diversity beta-group-significance \
+					--i-distance-matrix $dir_filt_feature/${metric}_distance_matrix.qza \
+					--m-metadata-file ../mapping.tsv \
+					--m-metadata-column $COMPARISON \
+					--p-method permdisp \
+					--o-visualization $dir_filt_feature/permdisp_${metric}.qzv
+				if [[ ! -f $dir_filt_feature/permdisp_${metric}.qzv ]]
+				then
+					touch $dir_filt_feature/permdisp_${metric}.qzv
+				fi
+				echo "DONE: diversity beta-group-significance permdisp ${metric} $dir_filt_feature"
+			fi
+			if [[ "$BLOCK" != "none" && "$BLOCK" != "$COMPARISON" && ! -f $dir_filt_feature/adonis_${BLOCK}_${metric}.qzv ]]
+			then
+				echo "RUNNING: diversity adonis ${BLOCK}+${COMPARISON} ${metric} $dir_filt_feature"
+				qiime diversity adonis \
+					--i-distance-matrix $dir_filt_feature/${metric}_distance_matrix.qza \
+					--m-metadata-file ../mapping.tsv \
+					--p-formula "${BLOCK}+${COMPARISON}" \
+					--p-permutations 999 \
+					--p-n-jobs $NSLOTS \
+					--o-visualization $dir_filt_feature/adonis_${BLOCK}_${metric}.qzv
+				if [[ ! -f $dir_filt_feature/adonis_${BLOCK}_${metric}.qzv ]]
+				then
+					touch $dir_filt_feature/adonis_${BLOCK}_${metric}.qzv
+				fi
+				echo "DONE: diversity adonis ${BLOCK}+${COMPARISON} ${metric} $dir_filt_feature"
+			fi
+		done
 		dir_filt_feature=$save_dir_filt_feature_2
 		if [[ ! -f $dir_filt_feature/comp-table.qza ]]
 		then
@@ -1125,10 +1217,10 @@ do
 
 		if [[ ! -f $dir_filt_feature/done_diversity_vegan_TSS ]]
 		then
-			echo "Rscript $RSCRIPTS_DIR/diversity_vegan_tss.R $dir_filt_feature $COMPARISON $rarefaction_depth $code"
+			echo "Rscript $RSCRIPTS_DIR/diversity_vegan_tss.R $dir_filt_feature $COMPARISON $rarefaction_depth $code $BLOCK"
 			echo "RUNNING: Rscript diversity_vegan_tss"
 			conda deactivate
-			Rscript $RSCRIPTS_DIR/diversity_vegan_tss.R $dir_filt_feature $COMPARISON $rarefaction_depth $code
+			Rscript $RSCRIPTS_DIR/diversity_vegan_tss.R $dir_filt_feature $COMPARISON $rarefaction_depth $code $BLOCK
 			echo "DONE: Rscript diversity_vegan_tss"
 		fi
 		
@@ -1166,10 +1258,10 @@ do
 			then
 				mkdir $dir_filt_feature/$ANCOMBC_NB_PERC
 			fi	
-			echo "Rscript $RSCRIPTS_DIR/run_ancombc.R $dir_filt_feature $dir_table/$TAX_PREFIX-taxonomy.qza $COMPARISON $BOXPLOT $ANCOMBC_NB_PERC"
+			echo "Rscript $RSCRIPTS_DIR/run_ancombc.R $dir_filt_feature $dir_table/$TAX_PREFIX-taxonomy.qza $COMPARISON $BOXPLOT $ANCOMBC_NB_PERC $BLOCK"
 			echo "RUNNING: Rscript ANCOM-BC"
 			conda deactivate
-			Rscript $RSCRIPTS_DIR/run_ancombc.R $dir_filt_feature $dir_table/$TAX_PREFIX-taxonomy.qza $COMPARISON $BOXPLOT $ANCOMBC_NB_PERC
+			Rscript $RSCRIPTS_DIR/run_ancombc.R $dir_filt_feature $dir_table/$TAX_PREFIX-taxonomy.qza $COMPARISON $BOXPLOT $ANCOMBC_NB_PERC $BLOCK
 			echo "DONE: Rscript ANCOM-BC"
 		fi
 	

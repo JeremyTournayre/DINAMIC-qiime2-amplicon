@@ -63,6 +63,36 @@ are used (0.28 / 0.8). Runs before 2026-11-13 used 0.05 / 0.2 hard-coded
 (values from a fungal LSU study, too strict for bacterial 16S: 20-45 % of
 DADA2 reads removed); set these values to reproduce older results.
 
+### Blocking factor and statistics (optional `block` column)
+
+The optional `input.tsv` column `block` names a `mapping.tsv` column (e.g.
+`Animal` for the donor animal) used as a covariate in the statistics. Empty
+or absent: no block. It is ignored for an analysis whose comparison column
+is the block itself, or when block and group are confounded.
+
+With a block:
+
+- QIIME2: `qiime diversity adonis --p-formula "<block>+<comparison>"`
+  (free permutations), `adonis_<block>_<metric>.qzv`.
+- vegan (`diversity_vegan_TSS/`): `permanova_block_*.tsv`
+  (`adonis2(dist ~ block + group, by = "margin")`, free and within-block
+  permutations), `pairwise_block_*.tsv` (> 2 groups), `alpha_lm_*.tsv`
+  (`alpha ~ block + group`, marginal F tests).
+- ANCOM-BC2 `fix_formula = "<block> + <group>"`, DESeq2
+  `~ <block> + <group>`, IndicSpecies permutations within blocks. LEfSe has
+  no block.
+
+Always (since 2026-11):
+
+- Aitchison distance (CLR, pseudocount 1, non-rarefied table) in QIIME2
+  (`aitchison_distance_matrix.qza/.qzv`, PCoA) and vegan; dispersion tests
+  (`permdisp_<metric>.qzv`, `betadisper_*.tsv`).
+- ANCOM-BC2 `struc_zero = TRUE` (no manual pseudocount); `neg_lb` is FALSE
+  unless every group has > 30 samples. Structural zeros are listed in
+  `ANCOM-BC_structural_zeros.tsv`.
+- IndicSpecies and LEfSe on relative abundances; IndicSpecies `p.value.BH`.
+- DESeq2 pairwise log fold changes are log2(group2 / group1).
+
 ### Additional numeric metadata (mapping_extra.tsv)
 
 Some numeric metadata columns (e.g. physico-chemical measurements) are
