@@ -77,8 +77,10 @@ suppressMessages(library(microbiome))
 
 args <- commandArgs(trailingOnly = TRUE)
 
-cl <- parallel::makeCluster(1)
-registerDoSNOW(cl)
+# No R cluster is created here: nothing in this script uses foreach, and
+# ancombc2() manages its own workers. A makeCluster(1) used to sit here,
+# after set.seed(42): every job then drew the same "random" port, and two
+# jobs starting on the same node failed with "port ... cannot be opened".
 
 physeq <- qza_to_phyloseq(
     features  = paste(args[1], "/../table.qza",       sep = ""),
@@ -253,7 +255,8 @@ for (i in 2:length(taxa)) {
     tax_asv_filtered$taxon_full <- apply(tax_asv_filtered[, 1:level_index, drop = FALSE], 1,
                                          function(x) paste(na.omit(x), collapse = "|"))
 
-    message_DESEQ2 <- c()
+    # Kept across levels: written to DESEQ2.tsv when no level succeeded.
+    if (!exists("message_DESEQ2")) message_DESEQ2 <- c()
     physeq_filtered <- aggregate_taxa(physeq_asv_filtered, taxa[i])
 
     if (nrow(tax_table(physeq_filtered)) > 1) {
@@ -313,15 +316,26 @@ for (i in 2:length(taxa)) {
 
             message("DESeq failed, switching to poscounts: ", e$message)
 
-            dds_tmp <- DESeqDataSetFromMatrix(
-                countData = otu_physeq_filtered_aggr_matr,
-                colData   = mapping,
-                design    = design_formula
-            )
+            # The poscounts retry can fail too (e.g. a sample with no read at
+            # this level, or a dispersion fit that does not converge): skip
+            # DESeq2 for this level and record why, so that ANCOM-BC2,
+            # IndicSpecies and LEfSe still run (behaviour of the 2025 code).
+            tryCatch({
+                dds_tmp <- DESeqDataSetFromMatrix(
+                    countData = otu_physeq_filtered_aggr_matr,
+                    colData   = mapping,
+                    design    = design_formula
+                )
 
-            dds_tmp <- estimateSizeFactors(dds_tmp, type = "poscounts")
+                dds_tmp <- estimateSizeFactors(dds_tmp, type = "poscounts")
 
-            DESeq(dds_tmp)
+                DESeq(dds_tmp)
+            }, error = function(e2) {
+                msg <- paste0("[", taxa[i], "] DESeq2 skipped: ", conditionMessage(e2))
+                cat(msg, "\n", sep = "")
+                message_DESEQ2 <<- c(message_DESEQ2, msg)
+                NULL
+            })
         })
 
         if (!is.null(dds)) {
