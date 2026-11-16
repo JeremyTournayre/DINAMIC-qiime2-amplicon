@@ -497,7 +497,26 @@ for (i in 2:length(taxa)) {
                 NULL
             }
         )
-        if (is.null(out)) next
+        if (is.null(out)) {
+            # ancombc2() failed, e.g. a single taxon left once its structural
+            # zeros are set aside (no bias correction possible with one
+            # taxon). Still list the structural zeros among the retained
+            # taxa: no read in any sample of a group (ANCOM-BC2 definition
+            # with neg_lb = FALSE; ANCOM-BC2 itself would first drop taxa
+            # below its own 10 % prevalence cut).
+            cnt <- as(otu_table(physeq_filtered), "matrix")
+            rownames(cnt) <- tax_asv_filtered$taxon_full
+            zi_fb <- data.frame(taxon = rownames(cnt), check.names = FALSE)
+            for (g in sort(as.character(groups_local))) {
+                s_g <- intersect(rownames(meta_df[meta_df[[group_col]] == g, , drop = FALSE]), colnames(cnt))
+                zi_fb[[paste0("structural_zero (", args[3], " = ", g, ")")]] <-
+                    rowSums(cnt[, s_g, drop = FALSE] > 0) == 0
+            }
+            n_sz <- sum(rowSums(as.matrix(zi_fb[, -1, drop = FALSE])) > 0)
+            cat("[", taxa[i], "] structural zeros listed without ANCOM-BC2: ", n_sz,
+                " of ", nrow(zi_fb), " retained taxa\n", sep = "")
+            out <- list(zero_ind = zi_fb, res = NULL)
+        }
 
         # Drop the block coefficients (lfc_/se_/W_/p_/q_/diff_/passed_ss_
         # <block><level>) so that out$res only holds the intercept and the
